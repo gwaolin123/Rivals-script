@@ -1,4 +1,4 @@
--- RIVALS MOBILE WORKING - CENTER CIRCLE AIMLOCK (Hydrogen/CodeX)
+-- RIVALS PERFECT AIMLOCK + AIM ASSIST 100% (Hydrogen/CodeX)
 -- Password: astro
 
 local Players = game:GetService("Players")
@@ -11,16 +11,16 @@ local VirtualUser = game:GetService("VirtualUser")
 -- Settings
 local aimlockEnabled = true
 local espEnabled = true
-local circleRadius = 100
+local circleRadius = 120
+local aimAssistStrength = 1.0 -- 100% strength
 
 -- GUI
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "RivalsAimlock"
+screenGui.Name = "RivalsPerfectAim"
 screenGui.Parent = game:GetService("CoreGui")
 
--- Main menu frame
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 180, 0, 90)
+mainFrame.Size = UDim2.new(0, 180, 0, 110)
 mainFrame.Position = UDim2.new(0, 10, 0, 80)
 mainFrame.BackgroundColor3 = Color3.new(0, 0, 0)
 mainFrame.BackgroundTransparency = 0.3
@@ -39,44 +39,46 @@ title.Parent = mainFrame
 
 local espBtn = Instance.new("TextButton")
 espBtn.Size = UDim2.new(0, 160, 0, 30)
-espBtn.Position = UDim2.new(0, 10, 0, 35)
+espBtn.Position = UDim2.new(0, 10, 0, 38)
 espBtn.Text = "ESP: ON"
 espBtn.BackgroundColor3 = Color3.new(0.2, 0.6, 0.2)
 espBtn.Parent = mainFrame
 
 local aimBtn = Instance.new("TextButton")
 aimBtn.Size = UDim2.new(0, 160, 0, 30)
-aimBtn.Position = UDim2.new(0, 10, 0, 70)
+aimBtn.Position = UDim2.new(0, 10, 0, 72)
 aimBtn.Text = "AIMLOCK: ON"
 aimBtn.BackgroundColor3 = Color3.new(0.2, 0.6, 0.2)
 aimBtn.Parent = mainFrame
 
--- Draw circle on screen
+-- Draw center circle
 local circle = Drawing.new("Circle")
 circle.Radius = circleRadius
-circle.Thickness = 2
+circle.Thickness = 3
 circle.Color = Color3.new(0, 1, 0)
 circle.Filled = false
 circle.Visible = true
+circle.Transparency = 0.8
 circle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 
--- Update circle position when screen resizes
 RunService.RenderStepped:Connect(function()
     circle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 end)
 
--- ESP using UI (text labels)
+-- ESP
 local espLabels = {}
 local function createESP(player)
     if player == LocalPlayer then return end
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(0, 100, 0, 20)
     label.BackgroundColor3 = Color3.new(0, 0, 0)
-    label.BackgroundTransparency = 0.5
+    label.BackgroundTransparency = 0.6
     label.TextColor3 = Color3.new(1, 0, 0)
     label.BorderSizePixel = 1
     label.BorderColor3 = Color3.new(1, 1, 1)
     label.Parent = screenGui
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 14
     espLabels[player] = label
     
     RunService.RenderStepped:Connect(function()
@@ -86,8 +88,9 @@ local function createESP(player)
         end
         local rootPos, onScreen = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position)
         if onScreen then
-            label.Position = UDim2.new(0, rootPos.X - 50, 0, rootPos.Y - 30)
-            label.Text = player.Name .. " | " .. math.floor((player.Character.Humanoid and player.Character.Humanoid.Health) or 100)
+            label.Position = UDim2.new(0, rootPos.X - 50, 0, rootPos.Y - 35)
+            local health = player.Character:FindFirstChild("Humanoid") and math.floor(player.Character.Humanoid.Health) or 100
+            label.Text = player.Name .. " | " .. health .. " HP"
             label.Visible = true
         else
             label.Visible = false
@@ -95,48 +98,73 @@ local function createESP(player)
     end)
 end
 
--- Get player inside circle (center screen aimlock)
-local function getPlayerInCircle()
+-- Get closest player to circle center
+local function getTargetInCircle()
     local center = circle.Position
-    local closest = nil
-    local shortestDist = circleRadius
+    local bestTarget = nil
+    local bestDistance = circleRadius
     
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
             local rootPos, onScreen = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position)
             if onScreen then
-                local dist = (Vector2.new(rootPos.X, rootPos.Y) - center).Magnitude
-                if dist < shortestDist then
-                    shortestDist = dist
-                    closest = player
+                local distToCenter = (Vector2.new(rootPos.X, rootPos.Y) - center).Magnitude
+                if distToCenter < bestDistance then
+                    bestDistance = distToCenter
+                    bestTarget = player
                 end
             end
         end
     end
-    return closest
+    return bestTarget, bestDistance
 end
 
--- Aimlock: automatically lock onto player inside circle and shoot
+-- 100% AIM ASSIST + AIMLOCK
+local currentTarget = nil
+local targetLocked = false
+
 RunService.RenderStepped:Connect(function()
-    if not aimlockEnabled then return end
+    if not aimlockEnabled then 
+        circle.Color = Color3.new(0, 1, 0)
+        return 
+    end
     
-    local target = getPlayerInCircle()
-    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-        -- Change circle color when locked
-        circle.Color = Color3.new(1, 0, 0)
+    local target, dist = getTargetInCircle()
+    
+    if target then
+        circle.Color = Color3.new(1, 0, 0) -- Red when target in circle
+        currentTarget = target
+        targetLocked = true
         
-        -- Aimlock: smooth camera to target
+        -- Get target position
         local targetPos = target.Character.HumanoidRootPart.Position
-        local lookVector = (targetPos - Camera.CFrame.Position).Unit
-        local newCFrame = CFrame.new(Camera.CFrame.Position, Camera.CFrame.Position + lookVector)
-        Camera.CFrame = Camera.CFrame:Lerp(newCFrame, 0.3)
+        local currentCamPos = Camera.CFrame.Position
+        local direction = (targetPos - currentCamPos).Unit
+        
+        -- 100% aim assist: instant snap to target
+        local newCFrame = CFrame.new(currentCamPos, currentCamPos + direction)
+        Camera.CFrame = newCFrame
         
         -- Auto shoot when target locked
         VirtualUser:Button1Down(Vector2.new(0,0))
-        wait(0.02)
+        wait(0.01)
         VirtualUser:Button1Up(Vector2.new(0,0))
+        
     else
-        circle.Color = Color3.new(0, 1, 0)
+        circle.Color = Color3.new(0, 1, 0) -- Green when empty
+        targetLocked = false
+        currentTarget = nil
+    end
+end)
+
+-- Also aim assist on touch (manual shooting)
+UserInputService.TouchTap:Connect(function(touch)
+    if not aimlockEnabled then return end
+    local target, _ = getTargetInCircle()
+    if target then
+        local targetPos = target.Character.HumanoidRootPart.Position
+        local direction = (targetPos - Camera.CFrame.Position).Unit
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, Camera.CFrame.Position + direction)
     end
 end)
 
@@ -166,6 +194,9 @@ aimBtn.MouseButton1Click:Connect(function()
     aimlockEnabled = not aimlockEnabled
     aimBtn.Text = aimlockEnabled and "AIMLOCK: ON" or "AIMLOCK: OFF"
     aimBtn.BackgroundColor3 = aimlockEnabled and Color3.new(0.2, 0.8, 0.2) or Color3.new(0.6, 0.2, 0.2)
+    if not aimlockEnabled then
+        circle.Color = Color3.new(0, 1, 0)
+    end
 end)
 
 -- Drag support
@@ -189,4 +220,4 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
-print("Rivals Aimlock loaded. Green circle in center = no target. Red = locked. Auto-shoots enemies inside circle.")
+print("Rivals 100% AIMLOCK + AIM ASSIST ACTIVE. Circle turns RED when enemy inside. Auto aims and shoots.")
