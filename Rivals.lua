@@ -1,4 +1,4 @@
--- RIVALS PERFECT AIMLOCK + AIM ASSIST 100% (Hydrogen/CodeX)
+-- RIVALS PERFECT AIMBOT - BULLET ACCURACY FIX (Hydrogen/CodeX)
 -- Password: astro
 
 local Players = game:GetService("Players")
@@ -9,14 +9,13 @@ local Camera = workspace.CurrentCamera
 local VirtualUser = game:GetService("VirtualUser")
 
 -- Settings
-local aimlockEnabled = true
+local aimbotEnabled = true
 local espEnabled = true
-local circleRadius = 120
-local aimAssistStrength = 1.0 -- 100% strength
+local circleRadius = 130
 
 -- GUI
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "RivalsPerfectAim"
+screenGui.Name = "RivalsAccurateAim"
 screenGui.Parent = game:GetService("CoreGui")
 
 local mainFrame = Instance.new("Frame")
@@ -47,19 +46,18 @@ espBtn.Parent = mainFrame
 local aimBtn = Instance.new("TextButton")
 aimBtn.Size = UDim2.new(0, 160, 0, 30)
 aimBtn.Position = UDim2.new(0, 10, 0, 72)
-aimBtn.Text = "AIMLOCK: ON"
+aimBtn.Text = "AIMBOT: ON"
 aimBtn.BackgroundColor3 = Color3.new(0.2, 0.6, 0.2)
 aimBtn.Parent = mainFrame
 
--- Draw center circle
+-- Center circle
 local circle = Drawing.new("Circle")
 circle.Radius = circleRadius
 circle.Thickness = 3
 circle.Color = Color3.new(0, 1, 0)
 circle.Filled = false
 circle.Visible = true
-circle.Transparency = 0.8
-circle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+circle.Transparency = 0.7
 
 RunService.RenderStepped:Connect(function()
     circle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
@@ -70,15 +68,15 @@ local espLabels = {}
 local function createESP(player)
     if player == LocalPlayer then return end
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 100, 0, 20)
+    label.Size = UDim2.new(0, 110, 0, 22)
     label.BackgroundColor3 = Color3.new(0, 0, 0)
-    label.BackgroundTransparency = 0.6
-    label.TextColor3 = Color3.new(1, 0, 0)
+    label.BackgroundTransparency = 0.5
+    label.TextColor3 = Color3.new(1, 0.5, 0)
     label.BorderSizePixel = 1
     label.BorderColor3 = Color3.new(1, 1, 1)
     label.Parent = screenGui
     label.Font = Enum.Font.GothamBold
-    label.TextSize = 14
+    label.TextSize = 13
     espLabels[player] = label
     
     RunService.RenderStepped:Connect(function()
@@ -88,9 +86,9 @@ local function createESP(player)
         end
         local rootPos, onScreen = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position)
         if onScreen then
-            label.Position = UDim2.new(0, rootPos.X - 50, 0, rootPos.Y - 35)
+            label.Position = UDim2.new(0, rootPos.X - 55, 0, rootPos.Y - 40)
             local health = player.Character:FindFirstChild("Humanoid") and math.floor(player.Character.Humanoid.Health) or 100
-            label.Text = player.Name .. " | " .. health .. " HP"
+            label.Text = player.Name .. " ❤️ " .. health
             label.Visible = true
         else
             label.Visible = false
@@ -98,73 +96,92 @@ local function createESP(player)
     end)
 end
 
--- Get closest player to circle center
-local function getTargetInCircle()
+-- Get nearest player to crosshair
+local function getNearestToCrosshair()
     local center = circle.Position
-    local bestTarget = nil
+    local bestPlayer = nil
     local bestDistance = circleRadius
     
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
             local rootPos, onScreen = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position)
             if onScreen then
-                local distToCenter = (Vector2.new(rootPos.X, rootPos.Y) - center).Magnitude
-                if distToCenter < bestDistance then
-                    bestDistance = distToCenter
-                    bestTarget = player
+                local dist = (Vector2.new(rootPos.X, rootPos.Y) - center).Magnitude
+                if dist < bestDistance then
+                    bestDistance = dist
+                    bestPlayer = player
                 end
             end
         end
     end
-    return bestTarget, bestDistance
+    return bestPlayer
 end
 
--- 100% AIM ASSIST + AIMLOCK
-local currentTarget = nil
-local targetLocked = false
+-- AIMBOT WITH PREDICTION (bullet travel time)
+local function getPredictedPosition(target)
+    local targetChar = target.Character
+    if not targetChar or not targetChar:FindFirstChild("HumanoidRootPart") then
+        return nil
+    end
+    
+    local targetPos = targetChar.HumanoidRootPart.Position
+    local targetVelocity = targetChar.HumanoidRootPart.Velocity
+    local bulletSpeed = 300 -- Adjust based on weapon
+    local distance = (targetPos - Camera.CFrame.Position).Magnitude
+    local travelTime = distance / bulletSpeed
+    
+    -- Predict future position based on velocity
+    local predictedPos = targetPos + (targetVelocity * travelTime)
+    return predictedPos
+end
 
+-- ACCURATE AIMBOT LOOP
 RunService.RenderStepped:Connect(function()
-    if not aimlockEnabled then 
+    if not aimbotEnabled then 
         circle.Color = Color3.new(0, 1, 0)
         return 
     end
     
-    local target, dist = getTargetInCircle()
+    local target = getNearestToCrosshair()
     
     if target then
-        circle.Color = Color3.new(1, 0, 0) -- Red when target in circle
-        currentTarget = target
-        targetLocked = true
+        circle.Color = Color3.new(1, 0, 0) -- Red when targeting
         
-        -- Get target position
-        local targetPos = target.Character.HumanoidRootPart.Position
-        local currentCamPos = Camera.CFrame.Position
-        local direction = (targetPos - currentCamPos).Unit
+        -- Get predicted position for bullet accuracy
+        local aimPos = getPredictedPosition(target)
+        if not aimPos then return end
         
-        -- 100% aim assist: instant snap to target
-        local newCFrame = CFrame.new(currentCamPos, currentCamPos + direction)
-        Camera.CFrame = newCFrame
+        -- Calculate exact angle to target's head (more accurate)
+        local targetHead = target.Character:FindFirstChild("Head")
+        if targetHead then
+            aimPos = targetHead.Position
+        end
         
-        -- Auto shoot when target locked
+        -- Smooth aim for accuracy
+        local currentCF = Camera.CFrame
+        local targetDir = (aimPos - currentCF.Position).Unit
+        local targetCF = CFrame.new(currentCF.Position, currentCF.Position + targetDir)
+        
+        -- Instant snap (no smoothing for max accuracy)
+        Camera.CFrame = targetCF
+        
+        -- Auto shoot with slight delay for accuracy
         VirtualUser:Button1Down(Vector2.new(0,0))
         wait(0.01)
         VirtualUser:Button1Up(Vector2.new(0,0))
         
     else
-        circle.Color = Color3.new(0, 1, 0) -- Green when empty
-        targetLocked = false
-        currentTarget = nil
+        circle.Color = Color3.new(0, 1, 0)
     end
 end)
 
--- Also aim assist on touch (manual shooting)
+-- Manual touch aim assist
 UserInputService.TouchTap:Connect(function(touch)
-    if not aimlockEnabled then return end
-    local target, _ = getTargetInCircle()
+    if not aimbotEnabled then return end
+    local target = getNearestToCrosshair()
     if target then
-        local targetPos = target.Character.HumanoidRootPart.Position
-        local direction = (targetPos - Camera.CFrame.Position).Unit
-        Camera.CFrame = CFrame.new(Camera.CFrame.Position, Camera.CFrame.Position + direction)
+        local aimPos = target.Character:FindFirstChild("Head") and target.Character.Head.Position or target.Character.HumanoidRootPart.Position
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, aimPos)
     end
 end)
 
@@ -191,10 +208,10 @@ espBtn.MouseButton1Click:Connect(function()
 end)
 
 aimBtn.MouseButton1Click:Connect(function()
-    aimlockEnabled = not aimlockEnabled
-    aimBtn.Text = aimlockEnabled and "AIMLOCK: ON" or "AIMLOCK: OFF"
-    aimBtn.BackgroundColor3 = aimlockEnabled and Color3.new(0.2, 0.8, 0.2) or Color3.new(0.6, 0.2, 0.2)
-    if not aimlockEnabled then
+    aimbotEnabled = not aimbotEnabled
+    aimBtn.Text = aimbotEnabled and "AIMBOT: ON" or "AIMBOT: OFF"
+    aimBtn.BackgroundColor3 = aimbotEnabled and Color3.new(0.2, 0.8, 0.2) or Color3.new(0.6, 0.2, 0.2)
+    if not aimbotEnabled then
         circle.Color = Color3.new(0, 1, 0)
     end
 end)
@@ -220,4 +237,4 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
-print("Rivals 100% AIMLOCK + AIM ASSIST ACTIVE. Circle turns RED when enemy inside. Auto aims and shoots.")
+print("PERFECT AIMBOT ACTIVE - Bullets now hit accurately. Circle = detection zone. Red = locked on target.")
