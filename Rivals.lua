@@ -1,4 +1,4 @@
--- RIVALS TRUE AIMBOT - REMOTE MANIPULATION (Hydrogen/CodeX)
+-- RIVALS 500% AIM ASSIST - NO CIRCLE (Hydrogen/CodeX)
 -- Password: astro
 
 local Players = game:GetService("Players")
@@ -9,13 +9,13 @@ local Camera = workspace.CurrentCamera
 local VirtualUser = game:GetService("VirtualUser")
 
 -- Settings
-local aimbotEnabled = true
+local aimAssistEnabled = true
 local espEnabled = true
-local circleRadius = 150
+local aimStrength = 5.0 -- 500% strength
 
 -- GUI
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "RivalsTrueAimbot"
+screenGui.Name = "Rivals500Aim"
 screenGui.Parent = game:GetService("CoreGui")
 
 local mainFrame = Instance.new("Frame")
@@ -46,21 +46,9 @@ espBtn.Parent = mainFrame
 local aimBtn = Instance.new("TextButton")
 aimBtn.Size = UDim2.new(0, 160, 0, 30)
 aimBtn.Position = UDim2.new(0, 10, 0, 72)
-aimBtn.Text = "AIMBOT: ON"
+aimBtn.Text = "500% AIM: ON"
 aimBtn.BackgroundColor3 = Color3.new(0.2, 0.6, 0.2)
 aimBtn.Parent = mainFrame
-
--- Circle
-local circle = Drawing.new("Circle")
-circle.Radius = circleRadius
-circle.Thickness = 3
-circle.Color = Color3.new(0, 1, 0)
-circle.Filled = false
-circle.Visible = true
-
-RunService.RenderStepped:Connect(function()
-    circle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-end)
 
 -- ESP
 local espLabels = {}
@@ -94,90 +82,53 @@ local function createESP(player)
     end)
 end
 
--- Get target in circle
-local function getTargetInCircle()
-    local center = circle.Position
-    local bestTarget = nil
-    local bestDist = circleRadius
+-- 500% AIM ASSIST - pulls crosshair to nearest enemy
+local function getNearestPlayerToCrosshair()
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    local bestPlayer = nil
+    local bestDistance = 300 -- Large detection range for 500% assist
     
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
             local rootPos, onScreen = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position)
             if onScreen then
                 local dist = (Vector2.new(rootPos.X, rootPos.Y) - center).Magnitude
-                if dist < bestDist then
-                    bestDist = dist
-                    bestTarget = player
+                if dist < bestDistance then
+                    bestDistance = dist
+                    bestPlayer = player
                 end
             end
         end
     end
-    return bestTarget
+    return bestPlayer, bestDistance
 end
 
--- HOOK FIRE REMOTE AND REDIRECT BULLETS
-local function hookFireRemote(target)
-    if not target then return end
-    
-    -- Get target head position
-    local headPos = target.Character:FindFirstChild("Head") and target.Character.Head.Position or target.Character.HumanoidRootPart.Position
-    local screenPos = Camera:WorldToViewportPoint(headPos)
-    
-    -- Simulate mouse movement to target (forces bullet direction)
-    local originalMousePos = UserInputService:GetMouseLocation()
-    local targetScreenPos = Vector2.new(screenPos.X, screenPos.Y)
-    
-    -- Move mouse to target instantly
-    mousemoveabs(targetScreenPos.X, targetScreenPos.Y)
-    wait(0.01)
-    
-    -- Fire weapon
-    VirtualUser:Button1Down(Vector2.new(0,0))
-    wait(0.01)
-    VirtualUser:Button1Up(Vector2.new(0,0))
-    
-    -- Restore mouse position (optional)
-    mousemoveabs(originalMousePos.X, originalMousePos.Y)
-end
+-- Mouse move function (if available)
+local mouseMove = mousemoveabs or (syn and syn.mousemoveabs) or (keypress and mouse_move)
 
--- Override mouse functions if available
-local mouseMove = mousemoveabs or (syn and syn.mousemoveabs) or (keypress and keypress)
-if not mouseMove then
-    print("Mouse manipulation not supported. Using fallback method.")
-end
-
--- AIMBOT LOOP
+-- 500% AIM ASSIST LOOP
 RunService.RenderStepped:Connect(function()
-    if not aimbotEnabled then 
-        circle.Color = Color3.new(0, 1, 0)
-        return 
-    end
+    if not aimAssistEnabled then return end
     
-    local target = getTargetInCircle()
-    if target then
-        circle.Color = Color3.new(1, 0, 0)
+    local target, dist = getNearestPlayerToCrosshair()
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        local headPos = target.Character:FindFirstChild("Head") and target.Character.Head.Position or target.Character.HumanoidRootPart.Position
+        local screenPos = Camera:WorldToViewportPoint(headPos)
         
-        -- Method 1: Mouse move + click
-        if mouseMove then
-            local headPos = target.Character:FindFirstChild("Head") and target.Character.Head.Position or target.Character.HumanoidRootPart.Position
-            local screenPos = Camera:WorldToViewportPoint(headPos)
-            if screenPos then
-                mouseMove(screenPos.X, screenPos.Y)
-                VirtualUser:Button1Down(Vector2.new(0,0))
-                wait(0.01)
-                VirtualUser:Button1Up(Vector2.new(0,0))
-            end
-        else
-            -- Fallback: lock camera and use CFrame
-            local headPos = target.Character:FindFirstChild("Head") and target.Character.Head.Position or target.Character.HumanoidRootPart.Position
-            local targetDir = (headPos - Camera.CFrame.Position).Unit
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, Camera.CFrame.Position + targetDir)
+        if screenPos and mouseMove then
+            -- Pull crosshair to enemy with 500% strength (instant snap)
+            local currentMouse = UserInputService:GetMouseLocation()
+            local targetX = screenPos.X
+            local targetY = screenPos.Y
+            
+            -- Instant snap to enemy
+            mouseMove(targetX, targetY)
+            
+            -- Auto fire when locked
             VirtualUser:Button1Down(Vector2.new(0,0))
             wait(0.01)
             VirtualUser:Button1Up(Vector2.new(0,0))
         end
-    else
-        circle.Color = Color3.new(0, 1, 0)
     end
 end)
 
@@ -204,9 +155,9 @@ espBtn.MouseButton1Click:Connect(function()
 end)
 
 aimBtn.MouseButton1Click:Connect(function()
-    aimbotEnabled = not aimbotEnabled
-    aimBtn.Text = aimbotEnabled and "AIMBOT: ON" or "AIMBOT: OFF"
-    aimBtn.BackgroundColor3 = aimbotEnabled and Color3.new(0.2, 0.8, 0.2) or Color3.new(0.6, 0.2, 0.2)
+    aimAssistEnabled = not aimAssistEnabled
+    aimBtn.Text = aimAssistEnabled and "500% AIM: ON" or "500% AIM: OFF"
+    aimBtn.BackgroundColor3 = aimAssistEnabled and Color3.new(0.2, 0.8, 0.2) or Color3.new(0.6, 0.2, 0.2)
 end)
 
 -- Drag support
@@ -230,4 +181,4 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
-print("TRUE AIMBOT ACTIVE - Using mouse move + click for accuracy. If still inaccurate, your executor does not support mousemoveabs.")
+print("500% AIM ASSIST ACTIVE - Crosshair snaps to enemies automatically. If not working, executor missing mousemoveabs.")
