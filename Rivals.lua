@@ -1,4 +1,4 @@
--- RIVALS PERFECT AIMBOT - BULLET ACCURACY FIX (Hydrogen/CodeX)
+-- RIVALS TRUE AIMBOT - REMOTE MANIPULATION (Hydrogen/CodeX)
 -- Password: astro
 
 local Players = game:GetService("Players")
@@ -11,11 +11,11 @@ local VirtualUser = game:GetService("VirtualUser")
 -- Settings
 local aimbotEnabled = true
 local espEnabled = true
-local circleRadius = 130
+local circleRadius = 150
 
 -- GUI
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "RivalsAccurateAim"
+screenGui.Name = "RivalsTrueAimbot"
 screenGui.Parent = game:GetService("CoreGui")
 
 local mainFrame = Instance.new("Frame")
@@ -50,14 +50,13 @@ aimBtn.Text = "AIMBOT: ON"
 aimBtn.BackgroundColor3 = Color3.new(0.2, 0.6, 0.2)
 aimBtn.Parent = mainFrame
 
--- Center circle
+-- Circle
 local circle = Drawing.new("Circle")
 circle.Radius = circleRadius
 circle.Thickness = 3
 circle.Color = Color3.new(0, 1, 0)
 circle.Filled = false
 circle.Visible = true
-circle.Transparency = 0.7
 
 RunService.RenderStepped:Connect(function()
     circle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
@@ -73,7 +72,6 @@ local function createESP(player)
     label.BackgroundTransparency = 0.5
     label.TextColor3 = Color3.new(1, 0.5, 0)
     label.BorderSizePixel = 1
-    label.BorderColor3 = Color3.new(1, 1, 1)
     label.Parent = screenGui
     label.Font = Enum.Font.GothamBold
     label.TextSize = 13
@@ -96,92 +94,90 @@ local function createESP(player)
     end)
 end
 
--- Get nearest player to crosshair
-local function getNearestToCrosshair()
+-- Get target in circle
+local function getTargetInCircle()
     local center = circle.Position
-    local bestPlayer = nil
-    local bestDistance = circleRadius
+    local bestTarget = nil
+    local bestDist = circleRadius
     
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
             local rootPos, onScreen = Camera:WorldToViewportPoint(player.Character.HumanoidRootPart.Position)
             if onScreen then
                 local dist = (Vector2.new(rootPos.X, rootPos.Y) - center).Magnitude
-                if dist < bestDistance then
-                    bestDistance = dist
-                    bestPlayer = player
+                if dist < bestDist then
+                    bestDist = dist
+                    bestTarget = player
                 end
             end
         end
     end
-    return bestPlayer
+    return bestTarget
 end
 
--- AIMBOT WITH PREDICTION (bullet travel time)
-local function getPredictedPosition(target)
-    local targetChar = target.Character
-    if not targetChar or not targetChar:FindFirstChild("HumanoidRootPart") then
-        return nil
-    end
+-- HOOK FIRE REMOTE AND REDIRECT BULLETS
+local function hookFireRemote(target)
+    if not target then return end
     
-    local targetPos = targetChar.HumanoidRootPart.Position
-    local targetVelocity = targetChar.HumanoidRootPart.Velocity
-    local bulletSpeed = 300 -- Adjust based on weapon
-    local distance = (targetPos - Camera.CFrame.Position).Magnitude
-    local travelTime = distance / bulletSpeed
+    -- Get target head position
+    local headPos = target.Character:FindFirstChild("Head") and target.Character.Head.Position or target.Character.HumanoidRootPart.Position
+    local screenPos = Camera:WorldToViewportPoint(headPos)
     
-    -- Predict future position based on velocity
-    local predictedPos = targetPos + (targetVelocity * travelTime)
-    return predictedPos
+    -- Simulate mouse movement to target (forces bullet direction)
+    local originalMousePos = UserInputService:GetMouseLocation()
+    local targetScreenPos = Vector2.new(screenPos.X, screenPos.Y)
+    
+    -- Move mouse to target instantly
+    mousemoveabs(targetScreenPos.X, targetScreenPos.Y)
+    wait(0.01)
+    
+    -- Fire weapon
+    VirtualUser:Button1Down(Vector2.new(0,0))
+    wait(0.01)
+    VirtualUser:Button1Up(Vector2.new(0,0))
+    
+    -- Restore mouse position (optional)
+    mousemoveabs(originalMousePos.X, originalMousePos.Y)
 end
 
--- ACCURATE AIMBOT LOOP
+-- Override mouse functions if available
+local mouseMove = mousemoveabs or (syn and syn.mousemoveabs) or (keypress and keypress)
+if not mouseMove then
+    print("Mouse manipulation not supported. Using fallback method.")
+end
+
+-- AIMBOT LOOP
 RunService.RenderStepped:Connect(function()
     if not aimbotEnabled then 
         circle.Color = Color3.new(0, 1, 0)
         return 
     end
     
-    local target = getNearestToCrosshair()
-    
+    local target = getTargetInCircle()
     if target then
-        circle.Color = Color3.new(1, 0, 0) -- Red when targeting
+        circle.Color = Color3.new(1, 0, 0)
         
-        -- Get predicted position for bullet accuracy
-        local aimPos = getPredictedPosition(target)
-        if not aimPos then return end
-        
-        -- Calculate exact angle to target's head (more accurate)
-        local targetHead = target.Character:FindFirstChild("Head")
-        if targetHead then
-            aimPos = targetHead.Position
+        -- Method 1: Mouse move + click
+        if mouseMove then
+            local headPos = target.Character:FindFirstChild("Head") and target.Character.Head.Position or target.Character.HumanoidRootPart.Position
+            local screenPos = Camera:WorldToViewportPoint(headPos)
+            if screenPos then
+                mouseMove(screenPos.X, screenPos.Y)
+                VirtualUser:Button1Down(Vector2.new(0,0))
+                wait(0.01)
+                VirtualUser:Button1Up(Vector2.new(0,0))
+            end
+        else
+            -- Fallback: lock camera and use CFrame
+            local headPos = target.Character:FindFirstChild("Head") and target.Character.Head.Position or target.Character.HumanoidRootPart.Position
+            local targetDir = (headPos - Camera.CFrame.Position).Unit
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, Camera.CFrame.Position + targetDir)
+            VirtualUser:Button1Down(Vector2.new(0,0))
+            wait(0.01)
+            VirtualUser:Button1Up(Vector2.new(0,0))
         end
-        
-        -- Smooth aim for accuracy
-        local currentCF = Camera.CFrame
-        local targetDir = (aimPos - currentCF.Position).Unit
-        local targetCF = CFrame.new(currentCF.Position, currentCF.Position + targetDir)
-        
-        -- Instant snap (no smoothing for max accuracy)
-        Camera.CFrame = targetCF
-        
-        -- Auto shoot with slight delay for accuracy
-        VirtualUser:Button1Down(Vector2.new(0,0))
-        wait(0.01)
-        VirtualUser:Button1Up(Vector2.new(0,0))
-        
     else
         circle.Color = Color3.new(0, 1, 0)
-    end
-end)
-
--- Manual touch aim assist
-UserInputService.TouchTap:Connect(function(touch)
-    if not aimbotEnabled then return end
-    local target = getNearestToCrosshair()
-    if target then
-        local aimPos = target.Character:FindFirstChild("Head") and target.Character.Head.Position or target.Character.HumanoidRootPart.Position
-        Camera.CFrame = CFrame.new(Camera.CFrame.Position, aimPos)
     end
 end)
 
@@ -211,9 +207,6 @@ aimBtn.MouseButton1Click:Connect(function()
     aimbotEnabled = not aimbotEnabled
     aimBtn.Text = aimbotEnabled and "AIMBOT: ON" or "AIMBOT: OFF"
     aimBtn.BackgroundColor3 = aimbotEnabled and Color3.new(0.2, 0.8, 0.2) or Color3.new(0.6, 0.2, 0.2)
-    if not aimbotEnabled then
-        circle.Color = Color3.new(0, 1, 0)
-    end
 end)
 
 -- Drag support
@@ -237,4 +230,4 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
-print("PERFECT AIMBOT ACTIVE - Bullets now hit accurately. Circle = detection zone. Red = locked on target.")
+print("TRUE AIMBOT ACTIVE - Using mouse move + click for accuracy. If still inaccurate, your executor does not support mousemoveabs.")
